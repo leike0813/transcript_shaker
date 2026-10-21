@@ -1,0 +1,4 @@
+{"type": "session", "version": 3, "id": "command-session", "timestamp": "2026-10-21T09:00:00.000Z", "cwd": "/tmp/command"}
+{"type": "message", "id": "m1", "timestamp": "2026-10-21T09:00:01.000Z", "message": {"role": "user", "content": [{"type": "text", "text": "COMMAND_USER"}], "meta": {"source": "model"}}}
+{"type": "message", "id": "m2", "timestamp": "2026-10-21T09:00:02.000Z", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "THINKING_PROBE_COMMAND"}, {"type": "text", "text": "COMMAND_ANSWER"}, {"type": "tool_use", "id": "call_c1", "name": "shell_command", "input": {"command": "whoami"}}], "meta": {"source": "model"}}}
+{"type": "message", "id": "m3", "timestamp": "2026-10-21T09:00:03.000Z", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "call_c1", "content": [{"type": "text", "text": "COMMAND_RESULT"}]}], "meta": {"source": "tool"}}}

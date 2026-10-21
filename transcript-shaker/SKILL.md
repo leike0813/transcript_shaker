@@ -12,9 +12,9 @@ description: 把 Agent Harness 的本地会话记录（transcript）裁剪转写
 ## 输入
 
 - 一个 transcript 文件路径（优先）；或
-- 一句模糊描述（如"看看我今天那次 Codex 会话"），此时先按"Codex transcript 定位"找文件。
+- 一句模糊描述（如"看看我今天那次 Codex 会话"），此时先按"Codex transcript 定位"或"支持范围"找文件。
 
-当前只支持 Codex rollout（`.jsonl` 与 `.jsonl.zst`）。识别不了格式时直接告诉用户尚未支持，不要自行猜测解析方式。
+支持 15 个 harness，见"支持范围"。识别按文件内容进行，与文件名无关；识别不了格式时脚本会报错并列出支持名，这时按下面的表核对用户想找的会话是否在支持范围内，不要自行猜测解析方式。
 
 ## 输出
 
@@ -32,7 +32,7 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 - `<transcript>`：文件路径；支持 `~` 展开。
 - `--max-chars`：工具结果与 system/developer 消息的截断上限，默认 2000 字符。
 - `--out`：输出文件；缺省写 stdout。父目录不存在时自动创建。
-- 依赖：只用 Python 标准库，要求 Python ≥3.9。`.jsonl.zst` 需要解压能力，三者任一即可：Python 3.14 `compression.zstd`、`zstandard` 包、`zstd` 命令行。
+- 依赖：只用 Python 标准库，要求 Python ≥3.9。`.jsonl.zst` / `.jsonl.zstd` 需要解压能力，三者任一即可：Python 3.14 `compression.zstd`、`zstandard` 包、`zstd` 命令行。SQLite（kilo-code）用标准库 `sqlite3` 只读打开。
 - 退出码：0 成功；1 文件不存在、不可读、格式无法识别或无法解压（原因写 stderr）。
 
 调用时机：定位到 transcript 文件之后、向用户交付日志之前。
@@ -49,6 +49,33 @@ ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-* 2>/dev/null | head 
 
 4. 只有一个候选时直接用；多个候选且无法判断时，列出候选并问用户要哪一个。
 
+## 支持范围
+
+脚本一次只解析**传入的那一个文件**。定位会话时按下表取文件；路径模式里的 `~` 需展开。
+
+| harness | 传入文件 | 备注 |
+|---|---|---|
+| codex | `$CODEX_HOME/sessions/*/*/*/rollout-*.jsonl`（或 `.jsonl.zst`） | 旧版本 rollout 也支持；归档在 `$CODEX_HOME/archived_sessions/` |
+| claude-code | `~/.claude/projects/*/<session-uuid>.jsonl` | `subagents/agent-*.jsonl` 是子代理会话，需单独传入 |
+| qwen-code | `~/.qwen/projects/*/chats/<uuid>.jsonl` | 同目录 `<uuid>.runtime.json`、`meta.json` 不是正文 |
+| command-code | `~/.commandcode/projects/*/*.jsonl` | `~/.commandcode/sessions/hooks-audit-*.jsonl` 是审计日志，不支持 |
+| codebuddy | `~/.codebuddy/projects/*/*.jsonl` | 0 字节文件很常见，跳过 |
+| gemini-cli | `~/.gemini/tmp/*/chats/session-*.json` | 同一会话可能有两份副本，按 `sessionId` 取一份 |
+| pi | `~/.pi/agent/sessions/*/*.jsonl` | 一个文件一个会话 |
+| omp | `~/.omp/agent/sessions/*/*.jsonl` | `<会话>/<Agent>.jsonl` 是子代理会话，需单独传入 |
+| minimax-code | `~/.minimax/v2/sessions/*/*/*/*/messages.jsonl` | 会话 id 与开始时间取自同目录 `manifest.json` |
+| kilo-code | `~/.local/share/kilo/kilo.db` | 整个库，只取最新的一个会话 |
+| cline | `~/.cline/data/sessions/*/*.messages.json` | 同目录 `<id>.json` 提供 cwd 与真实开始时间 |
+| multicoder | `~/.multicoder/content/ses_*.json` | 无逐条时间戳 |
+| grok | `~/.grok/sessions/*/*/chat_history.jsonl` | 只读这一份；同目录 `updates.jsonl`、`events.jsonl` 是重复流 |
+| kimi-code | `~/.kimi-code/sessions/*/session_*/agents/main/wire.jsonl` | `agents/agent-*/wire.jsonl` 是子代理会话，需单独传入 |
+| deepseek-harness | `~/.dsh/sessions/*/*/session*.jsonl.zstd` | 子会话是独立目录，需单独传入 |
+
+两条约束：
+
+- 子代理 / 子会话的 transcript 不自动拼接。用户要看完整调用链时，逐个文件运行脚本并分别交付。
+- `kilo.db` 多会话时只解析最新会话；用户要看其它会话时，说明需要先导出该会话，不要假装输出覆盖了整库。
+
 ## 裁剪与输出规则
 
 - thinking / reasoning 一律不输出。
@@ -61,4 +88,4 @@ ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-* 2>/dev/null | head 
 - 不修改、不移动、不删除原 transcript 文件。
 - 不对会话内容做语义判断或总结；用户要摘要时说明这不在本 skill 的职责内。
 - 不手工解析 transcript，也不用其它工具重新拼接输出。
-- 当前只支持 Codex；其它 harness 的 transcript 直接说明尚未支持，并给出文件路径供后续扩展。
+- 当前支持范围见"支持范围"；不在表内的 harness 直接说明尚未支持，并给出用户可能想找的文件路径，不要伪造解析结果。

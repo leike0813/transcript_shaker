@@ -11,7 +11,19 @@ from .model import Event, Session
 DEFAULT_MAX_CHARS = 2000
 
 # 这些工具承载的是命令原文，命令不截断（只截结果）。
-SHELL_TOOLS = {"exec_command", "shell"}
+# 取值来自各 harness 实测的 shell 工具名（codex/claude/command-code/qwen/kimi/grok/dsh/pi/omp/codebuddy/cline）。
+SHELL_TOOLS = {
+    "exec_command",
+    "shell",
+    "bash",
+    "Bash",
+    "shell_command",
+    "run_shell_command",
+    "run_commands",
+    "run_terminal_command",
+    "terminal",
+    "sh",
+}
 
 KIND_ORDER = ("user", "assistant", "system", "tool")
 

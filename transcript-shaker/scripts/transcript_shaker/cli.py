@@ -56,6 +56,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     document = render_markdown(session, events, max_chars=args.max_chars)
+    # 某些 transcript 的 JSON 里带孤立代理项（\ud83e 之类），直接写会抛 UnicodeEncodeError。
+    document = document.encode("utf-8", "replace").decode("utf-8")
     if args.out:
         out_path = Path(args.out).expanduser()
         try:

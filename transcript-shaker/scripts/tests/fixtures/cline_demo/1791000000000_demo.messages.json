@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-21T09:00:00.000Z",
+  "agent": "cline",
+  "sessionId": "cline-session",
+  "origin": "cli",
+  "system_prompt": "CLINE_SYSTEM",
+  "messages": [
+    {
+      "id": "c1",
+      "role": "user",
+      "ts": 1791000001000,
+      "content": [{"type": "text", "text": "CLINE_USER"}]
+    },
+    {
+      "id": "c2",
+      "role": "assistant",
+      "ts": 1791000002000,
+      "content": [
+        {"type": "thinking", "thinking": "THINKING_PROBE_CLINE"},
+        {"type": "text", "text": "CLINE_ANSWER"},
+        {"type": "tool_use", "id": "call_cl1", "name": "run_commands", "input": {"command": "ls"}}
+      ]
+    },
+    {
+      "id": "c3",
+      "role": "user",
+      "ts": 1791000003000,
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "call_cl1",
+          "name": "run_commands",
+          "content": [{"query": "ls", "result": "CLINE_RESULT", "success": true}]
+        }
+      ]
+    }
+  ]
+}

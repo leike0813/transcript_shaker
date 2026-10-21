@@ -26,4 +26,4 @@ class Session:
     started: str = ""    # session_meta.timestamp
     version: str = ""    # codex cli_version
     originator: str = "" # codex originator
-    history: str = ""    # "paginated" | "legacy"
+    history: str = ""    # codex 的 "paginated"/"legacy"；其它 harness 留空

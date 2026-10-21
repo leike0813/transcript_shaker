@@ -7,14 +7,20 @@
 
 from __future__ import annotations
 
-import json
-import shlex
-import shutil
-import subprocess
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..model import Event, Session
+from ._support import (
+    ResultBinder,
+    as_text,
+    head_records,
+    iter_records,
+    join_argv,
+    message_event,
+    text_blocks,
+    tool_event,
+)
 from .base import Adapter
 
 # item 流里出现这些类型，说明该文件的工具调用记录在 item 流中。
@@ -48,44 +54,14 @@ _ROLE_MAP = {
     "system": "system",
 }
 
-
-def _text_parts(content: Any, types: Tuple[str, ...]) -> str:
-    """从 content 块列表里取出指定 type 的 text，按顺序用换行连接。"""
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-    parts: List[str] = []
-    for block in content:
-        if not isinstance(block, dict) or block.get("type") not in types:
-            continue
-        text = block.get("text")
-        if isinstance(text, str) and text:
-            parts.append(text)
-    return "\n".join(parts)
-
-
-def _as_text(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    if value is None:
-        return ""
-    return json.dumps(value, ensure_ascii=False)
+_TEXT_TYPES = ("input_text", "output_text", "text")
 
 
 def _output_text(output: Any) -> str:
     """工具输出：字符串原样，content 块列表取 text，其它按 JSON 文本。"""
     if isinstance(output, list):
-        return _text_parts(output, ("text", "input_text", "output_text"))
-    return _as_text(output)
-
-
-def _join_argv(command: Any) -> str:
-    if isinstance(command, str):
-        return command
-    if isinstance(command, list):
-        return " ".join(shlex.quote(str(part)) for part in command)
-    return ""
+        return text_blocks(output, _TEXT_TYPES)
+    return as_text(output)
 
 
 def _mcp_name(name: str) -> str:
@@ -98,75 +74,9 @@ def _mcp_name(name: str) -> str:
     return f"mcp:{parts[0]}"
 
 
-def _message(role: str, text: str, ts: str) -> Optional[Event]:
-    if not text.strip():
-        return None
-    return Event(kind="message", role=role, text=text, ts=ts)
-
-
-def _tool(tool: str, call: str, result: str, status: str, ts: str) -> Optional[Event]:
-    if not call and not result and not status:
-        return None
-    return Event(kind="tool", tool=tool, call=call, result=result, status=status, ts=ts)
-
-
 def _join_name(prefix: str, *parts: Any) -> str:
     tail = ".".join(str(part) for part in parts if part)
     return f"{prefix}{tail}" if tail else prefix.rstrip(":")
-
-
-def _decompress_lines(path: Path) -> Iterator[str]:
-    try:
-        from compression import zstd as zstd_module  # Python 3.14+
-    except ImportError:
-        zstd_module = None
-    if zstd_module is not None:
-        with zstd_module.open(path, "rt", encoding="utf-8", errors="replace") as handle:
-            yield from handle
-        return
-
-    try:
-        import zstandard as zstandard_module
-    except ImportError:
-        zstandard_module = None
-    if zstandard_module is not None:
-        with zstandard_module.open(path, "rt", encoding="utf-8", errors="replace") as handle:
-            yield from handle
-        return
-
-    zstd_bin = shutil.which("zstd")
-    if zstd_bin is None:
-        raise RuntimeError(
-            f"cannot decompress {path}：需要 Python 3.14 compression.zstd、zstandard 包或 zstd 命令行"
-        )
-    proc = subprocess.run([zstd_bin, "-dc", str(path)], capture_output=True)
-    if proc.returncode != 0:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise RuntimeError(f"cannot decompress {path}：zstd 命令失败（{detail}）")
-    for line in proc.stdout.decode("utf-8", "replace").splitlines():
-        yield line
-
-
-def _iter_lines(path: Path) -> Iterator[str]:
-    if path.name.endswith(".zst"):
-        yield from _decompress_lines(path)
-        return
-    with path.open("r", encoding="utf-8", errors="replace") as handle:
-        yield from handle
-
-
-def _iter_records(path: Path) -> Iterator[Dict[str, Any]]:
-    """逐行解析；不可解析的行与空行直接跳过。"""
-    for line in _iter_lines(path):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict):
-            yield record
 
 
 def _payload(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -181,19 +91,17 @@ class CodexAdapter(Adapter):
         if not path.is_file():
             return False
         try:
-            for index, record in enumerate(_iter_records(path)):
-                if index >= DETECT_LINE_LIMIT:
-                    break
+            for record in head_records(path, DETECT_LINE_LIMIT):
                 if record.get("type") in KNOWN_RECORD_TYPES and isinstance(record.get("payload"), dict):
                     return True
-        except OSError:
+        except (OSError, RuntimeError):
             return False
         return False
 
     def parse(self, path: Path) -> Tuple[Session, List[Event]]:
         meta: Dict[str, Any] = {}
         history = "legacy"
-        for record in _iter_records(path):
+        for record in iter_records(path):
             rtype = record.get("type")
             if rtype == "session_meta" and not meta:
                 meta = _payload(record)
@@ -221,7 +129,7 @@ class CodexAdapter(Adapter):
 
     def _parse_paginated(self, path: Path) -> List[Event]:
         events: List[Event] = []
-        for record in _iter_records(path):
+        for record in iter_records(path):
             ts = str(record.get("timestamp") or "")
             rtype = record.get("type")
             payload = _payload(record)
@@ -234,16 +142,16 @@ class CodexAdapter(Adapter):
             elif rtype == "response_item" and payload.get("type") == "message":
                 # item 流已覆盖 user/assistant，这里只补 system/developer。
                 if payload.get("role") in ("developer", "system"):
-                    text = _text_parts(payload.get("content"), ("input_text", "output_text", "text"))
-                    event = _message("system", text, ts)
+                    text = text_blocks(payload.get("content"), _TEXT_TYPES)
+                    event = message_event("system", text, ts)
                     if event is not None:
                         events.append(event)
         return events
 
     def _parse_legacy(self, path: Path) -> List[Event]:
         events: List[Event] = []
-        pending: Dict[str, Event] = {}
-        for record in _iter_records(path):
+        binder = ResultBinder()
+        for record in iter_records(path):
             ts = str(record.get("timestamp") or "")
             rtype = record.get("type")
             payload = _payload(record)
@@ -254,9 +162,9 @@ class CodexAdapter(Adapter):
             if rtype == "event_msg":
                 ptype = payload.get("type")
                 if ptype == "agent_message":
-                    event = _message("assistant", _as_text(payload.get("message") or payload.get("text")), ts)
+                    event = message_event("assistant", as_text(payload.get("message") or payload.get("text")), ts)
                 elif ptype == "user_message":
-                    event = _message("user", _as_text(payload.get("message") or payload.get("text")), ts)
+                    event = message_event("user", as_text(payload.get("message") or payload.get("text")), ts)
                 else:
                     event = None
                 if event is not None:
@@ -271,75 +179,64 @@ class CodexAdapter(Adapter):
                 role = _ROLE_MAP.get(str(payload.get("role") or ""), "")
                 if not role:
                     continue
-                event = _message(role, _text_parts(payload.get("content"), ("input_text", "output_text", "text")), ts)
+                event = message_event(role, text_blocks(payload.get("content"), _TEXT_TYPES), ts)
                 if event is not None:
                     events.append(event)
             elif ptype == "function_call":
-                event = _tool(
+                event = tool_event(
                     _mcp_name(str(payload.get("name") or "function")),
-                    _as_text(payload.get("arguments")),
+                    as_text(payload.get("arguments")),
                     "",
                     "",
                     ts,
                 )
                 if event is not None:
                     events.append(event)
-                    if call_id:
-                        pending[str(call_id)] = event
+                    binder.add(call_id, event)
             elif ptype == "function_call_output":
-                _fill_result(pending, call_id, _output_text(payload.get("output")))
+                binder.bind(call_id, _output_text(payload.get("output")))
             elif ptype == "custom_tool_call":
-                event = _tool(str(payload.get("name") or "custom_tool"), _as_text(payload.get("input")), "", "", ts)
+                event = tool_event(str(payload.get("name") or "custom_tool"), as_text(payload.get("input")), "", "", ts)
                 if event is not None:
                     events.append(event)
-                    if call_id:
-                        pending[str(call_id)] = event
+                    binder.add(call_id, event)
             elif ptype == "custom_tool_call_output":
-                _fill_result(pending, call_id, _output_text(payload.get("output")))
+                binder.bind(call_id, _output_text(payload.get("output")))
             elif ptype == "local_shell_call":
                 action = payload.get("action")
                 command = action.get("command") if isinstance(action, dict) else None
-                event = _tool("shell", _join_argv(command), "", "", ts)
+                event = tool_event("shell", join_argv(command), "", "", ts)
                 if event is not None:
                     events.append(event)
-                    if call_id:
-                        pending[str(call_id)] = event
+                    binder.add(call_id, event)
             elif ptype == "local_shell_call_output":
-                _fill_result(pending, call_id, _output_text(payload.get("output")))
+                binder.bind(call_id, _output_text(payload.get("output")))
             elif ptype == "web_search_call":
                 action = payload.get("action")
                 query = payload.get("query")
                 if not query and isinstance(action, dict):
                     query = action.get("query")
-                event = _tool("web_search", _as_text(query), "", "", ts)
+                event = tool_event("web_search", as_text(query), "", "", ts)
                 if event is not None:
                     events.append(event)
         return events
 
 
-def _fill_result(pending: Dict[str, Event], call_id: Any, text: str) -> None:
-    if not call_id or not text:
-        return
-    event = pending.get(str(call_id))
-    if event is not None:
-        event.result = text
-
-
 def _item_event(item: Dict[str, Any], ts: str) -> Optional[Event]:
     itype = item.get("type")
     if itype == "UserMessage":
-        return _message("user", _text_parts(item.get("content"), ("text",)), ts)
+        return message_event("user", text_blocks(item.get("content"), ("text",)), ts)
     if itype == "AgentMessage":
-        return _message("assistant", _text_parts(item.get("content"), ("Text", "text")), ts)
+        return message_event("assistant", text_blocks(item.get("content"), ("Text", "text")), ts)
     if itype == "Plan":
-        return _message("assistant", _as_text(item.get("text")), ts)
+        return message_event("assistant", as_text(item.get("text")), ts)
     if itype == "ContextCompaction":
-        return _message("system", "context compacted", ts)
+        return message_event("system", "context compacted", ts)
     if itype == "CommandExecution":
-        event = _tool(
+        event = tool_event(
             "exec_command",
-            _join_argv(item.get("command")),
-            _as_text(item.get("aggregated_output")),
+            join_argv(item.get("command")),
+            as_text(item.get("aggregated_output")),
             str(item.get("status") or ""),
             ts,
         )
@@ -347,10 +244,10 @@ def _item_event(item: Dict[str, Any], ts: str) -> Optional[Event]:
     if itype == "McpToolCall":
         result = item.get("result")
         content = result.get("content") if isinstance(result, dict) else None
-        return _tool(
+        return tool_event(
             _join_name("mcp:", item.get("server"), item.get("tool")),
-            _as_text(item.get("arguments")),
-            _text_parts(content, ("text",)),
+            as_text(item.get("arguments")),
+            text_blocks(content, ("text",)),
             str(item.get("status") or ""),
             ts,
         )
@@ -368,26 +265,26 @@ def _item_event(item: Dict[str, Any], ts: str) -> Optional[Event]:
                         diffs.append(str(diff))
                 else:
                     paths.append(str(path))
-        return _tool("file_change", "; ".join(paths), "\n".join(diffs), "", ts)
+        return tool_event("file_change", "; ".join(paths), "\n".join(diffs), "", ts)
     if itype == "WebSearch":
         action = item.get("action")
         query = item.get("query")
         if not query and isinstance(action, dict):
             query = action.get("query")
-        return _tool("web_search", _as_text(query), "", "", ts)
+        return tool_event("web_search", as_text(query), "", "", ts)
     if itype == "CollabAgentToolCall":
-        return _tool(
+        return tool_event(
             _join_name("collab:", item.get("tool")),
-            _as_text(item.get("prompt")),
+            as_text(item.get("prompt")),
             "",
             str(item.get("status") or ""),
             ts,
         )
     if itype == "ImageView":
-        return _tool("image_view", _as_text(item.get("path")), "", "", ts)
+        return tool_event("image_view", as_text(item.get("path")), "", "", ts)
     if itype == "SubAgentActivity":
-        call = _as_text(item.get("agent_path") or item.get("agent_thread_id"))
+        call = as_text(item.get("agent_path") or item.get("agent_thread_id"))
         if item.get("model"):
             call = f"{call} (model={item['model']})"
-        return _tool(_join_name("subagent:", item.get("kind")), call, "", "", ts)
+        return tool_event(_join_name("subagent:", item.get("kind")), call, "", "", ts)
     return None

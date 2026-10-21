@@ -1,0 +1,6 @@
+{"type": "summary", "id": "s1", "timestamp": 1791000000000, "summary": "CODEBUDDY_SUMMARY_NOISE", "providerData": {}}
+{"type": "message", "id": "m1", "timestamp": 1791000001000, "role": "user", "content": [{"type": "input_text", "text": "CODEBUDDY_USER"}], "sessionId": "codebuddy-session", "cwd": "/tmp/codebuddy"}
+{"type": "reasoning", "id": "r1", "timestamp": 1791000001500, "content": [], "rawContent": [{"text": "THINKING_PROBE_CODEBUDDY"}], "sessionId": "codebuddy-session", "cwd": "/tmp/codebuddy"}
+{"type": "message", "id": "m2", "timestamp": 1791000002000, "role": "assistant", "content": [{"type": "output_text", "text": "CODEBUDDY_ANSWER"}], "sessionId": "codebuddy-session", "cwd": "/tmp/codebuddy"}
+{"type": "function_call", "id": "f1", "timestamp": 1791000003000, "callId": "call_b1", "name": "Bash", "arguments": "{\"command\":\"ls\"}", "sessionId": "codebuddy-session", "cwd": "/tmp/codebuddy"}
+{"type": "function_call_result", "id": "f2", "timestamp": 1791000004000, "callId": "call_b1", "name": "Bash", "status": "completed", "output": {"type": "text", "text": "CODEBUDDY_RESULT"}, "sessionId": "codebuddy-session", "cwd": "/tmp/codebuddy"}

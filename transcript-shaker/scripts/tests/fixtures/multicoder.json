@@ -1,0 +1,36 @@
+{
+  "sessionId": "ses_demo",
+  "agentKey": "OpenCode",
+  "state": "idle",
+  "cwd": "/tmp/multicoder",
+  "root": "/tmp/multicoder",
+  "repo": "demo",
+  "title": "multicoder demo",
+  "updatedAt": "2026-10-21T09:00:00.000Z",
+  "configOptions": [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "demo"}],
+  "messages": [
+    {
+      "role": "user",
+      "parts": [{"type": "text", "text": "MULTICODER_USER"}]
+    },
+    {
+      "role": "assistant",
+      "parts": [
+        {"type": "reasoning", "text": "THINKING_PROBE_MULTICODER", "state": "done"},
+        {"type": "text", "text": "MULTICODER_ANSWER"},
+        {
+          "type": "tool-execute",
+          "toolCallId": "call_mc1",
+          "state": "output-available",
+          "title": "ls",
+          "input": {"command": "ls"},
+          "output": [{"content": {"text": "MULTICODER_RESULT"}}]
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "parts": []
+    }
+  ]
+}

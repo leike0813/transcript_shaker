@@ -1,0 +1,3 @@
+{"message_id": "mm1", "turn_id": "turn1", "message": {"role": "user", "content": [{"type": "text", "text": "MINIMAX_USER"}]}}
+{"message_id": "mm2", "turn_id": "turn1", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "THINKING_PROBE_MINIMAX", "thinkingSignature": ""}, {"type": "text", "text": "MINIMAX_ANSWER"}, {"type": "toolCall", "id": "call_m1", "name": "bash", "arguments": {"command": "ls"}}]}}
+{"message_id": "mm3", "turn_id": "turn1", "message": {"role": "toolResult", "toolCallId": "call_m1", "toolName": "bash", "content": [{"type": "text", "text": "MINIMAX_RESULT"}], "isError": false}}

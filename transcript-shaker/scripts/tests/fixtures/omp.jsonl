@@ -1,0 +1,7 @@
+{"type": "title", "v": 1, "title": "OMP demo", "source": "auto", "updatedAt": "2026-10-21T09:00:00.000Z", "pad": "0000000000000000000000000000000000000000"}
+{"type": "session", "version": 3, "id": "omp-session", "timestamp": "2026-10-21T09:00:00.100Z", "cwd": "/tmp/omp"}
+{"type": "custom", "customType": "tool_execution_start", "data": {"tool": "bash", "callId": "call_o1"}, "id": "c1", "parentId": "m1", "timestamp": "2026-10-21T09:00:02.500Z"}
+{"type": "message", "id": "m1", "parentId": null, "timestamp": "2026-10-21T09:00:01.000Z", "message": {"role": "user", "content": [{"type": "text", "text": "OMP_USER"}], "timestamp": "2026-10-21T09:00:01.000Z"}}
+{"type": "message", "id": "m2", "parentId": "m1", "timestamp": "2026-10-21T09:00:01.500Z", "message": {"role": "developer", "content": [{"type": "text", "text": "OMP_SYSTEM"}], "timestamp": "2026-10-21T09:00:01.500Z"}}
+{"type": "message", "id": "m3", "parentId": "m2", "timestamp": "2026-10-21T09:00:02.000Z", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "THINKING_PROBE_OMP", "thinkingSignature": ""}, {"type": "text", "text": "OMP_ANSWER"}, {"type": "toolCall", "id": "call_o1", "name": "bash", "arguments": {"command": "ls"}}], "timestamp": "2026-10-21T09:00:02.000Z"}}
+{"type": "message", "id": "m4", "parentId": "m3", "timestamp": "2026-10-21T09:00:03.000Z", "message": {"role": "toolResult", "toolCallId": "call_o1", "toolName": "bash", "content": [{"type": "text", "text": "OMP_RESULT"}], "isError": true, "timestamp": "2026-10-21T09:00:03.000Z"}}

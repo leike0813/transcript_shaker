@@ -1,0 +1,6 @@
+{"type": "metadata", "protocol_version": 1, "created_at": "2026-10-21T09:00:00.000Z"}
+{"type": "agent.message.appended", "time": 1791000001000, "kind": "message", "message": {"message": {"role": "user", "content": [{"type": "text", "text": "KIMI_USER"}]}, "meta": {"source": "input"}}}
+{"type": "agent.message.appended", "time": 1791000001500, "kind": "message", "message": {"message": {"role": "user", "content": [{"type": "text", "text": "KIMI_NOTIFY_NOISE"}]}, "meta": {"source": "notify"}}}
+{"type": "agent.message.appended", "time": 1791000002000, "kind": "message", "message": {"message": {"role": "assistant", "content": [{"type": "think", "think": "THINKING_PROBE_KIMI", "reasoningKey": "k1"}, {"type": "text", "text": "KIMI_ANSWER"}], "toolCalls": [{"type": "function", "id": "call_k1", "name": "Bash", "arguments": "{\"command\":\"ls\"}"}]}, "meta": {"source": "llm"}}}
+{"type": "agent.message.appended", "time": 1791000003000, "kind": "message", "message": {"message": {"role": "tool", "content": [{"type": "text", "text": "KIMI_RESULT"}], "toolCallId": "call_k1"}, "meta": {"source": "tool"}}}
+{"type": "turn.ended", "time": 1791000004000, "agentId": "main", "turnId": "t1", "reason": "completed", "durationMs": 3000}

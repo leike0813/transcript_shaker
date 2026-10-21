@@ -1,0 +1,5 @@
+{"type": "session", "version": 3, "id": "pi-session", "timestamp": "2026-10-21T09:00:00.000Z", "cwd": "/tmp/pi"}
+{"type": "model_change", "id": "e0", "parentId": null, "timestamp": "2026-10-21T09:00:00.500Z", "provider": "demo", "modelId": "demo-model"}
+{"type": "message", "id": "m1", "parentId": "e0", "timestamp": "2026-10-21T09:00:01.000Z", "message": {"role": "user", "content": [{"type": "text", "text": "PI_USER"}], "timestamp": "2026-10-21T09:00:01.000Z"}}
+{"type": "message", "id": "m2", "parentId": "m1", "timestamp": "2026-10-21T09:00:02.000Z", "message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "THINKING_PROBE_PI", "thinkingSignature": ""}, {"type": "text", "text": "PI_ANSWER"}, {"type": "toolCall", "id": "call_p1", "name": "bash", "arguments": {"command": "ls"}}], "timestamp": "2026-10-21T09:00:02.000Z"}}
+{"type": "message", "id": "m3", "parentId": "m2", "timestamp": "2026-10-21T09:00:03.000Z", "message": {"role": "toolResult", "toolCallId": "call_p1", "toolName": "bash", "content": [{"type": "text", "text": "PI_RESULT"}], "isError": false, "timestamp": "2026-10-21T09:00:03.000Z"}}

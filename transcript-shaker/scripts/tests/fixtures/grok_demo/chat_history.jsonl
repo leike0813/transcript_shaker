@@ -1,0 +1,5 @@
+{"type": "system", "content": "GROK_SYSTEM"}
+{"type": "user", "content": [{"type": "text", "text": "GROK_USER"}]}
+{"type": "assistant", "content": "GROK_ANSWER", "model_id": "demo-model", "reasoning": "THINKING_PROBE_GROK", "tool_calls": [{"id": "call_g1", "name": "run_terminal_command", "arguments": "{\"command\":\"ls\"}"}]}
+{"type": "tool_result", "tool_call_id": "call_g1", "content": "GROK_RESULT"}
+{"type": "user", "content": [{"type": "text", "text": "GROK_SYNTHETIC"}], "synthetic_reason": "context_injection"}
