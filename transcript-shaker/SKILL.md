@@ -1,61 +1,83 @@
 ---
 name: transcript-shaker
-description: 把 Agent Harness 的本地会话记录（transcript）裁剪转写为一份精炼的 Markdown 日志。当用户要求整理、精炼、导出或"转写"某次 Agent 会话记录（例如 Codex rollout）时使用。
+description: 把 Agent Harness 的本地会话记录（transcript）列出、裁剪并转写为精炼的 Markdown 日志。当用户要求查找最近的 Agent 会话记录，或整理、精炼、导出、转写某次会话（如 Codex rollout、Claude Code、omp、DeepSeek Harness）时使用。
 ---
 
-# transcript_shaker
+# transcript-shaker
 
-## 用途
+## 目标
 
-把一段 Agent 会话的本地 transcript 转成按时间顺序排列的 Markdown 日志：保留用户/助手/系统消息与工具调用，隐藏 thinking，截断冗长的工具输出。只做格式转换与裁剪，不解释、不总结会话内容。
+把一段 Agent 会话的本地 transcript 转成按时间顺序排列的 Markdown 日志：保留 user/assistant/system 消息与工具调用，隐藏 thinking，截断冗长的工具结果。只做定位、格式转换与裁剪。
 
-## 输入
+## 非目标
 
-- 一个 transcript 文件路径（优先）；或
-- 一句模糊描述（如"看看我今天那次 Codex 会话"），此时先按"Codex transcript 定位"或"支持范围"找文件。
+- 不解释、总结、评价会话内容。用户要摘要时明确说明超出本 skill 职责。
+- 不把子代理/子会话 transcript 拼进主会话；需要时逐个文件运行、分别交付。
+- 不为支持范围以外的 harness 现场编写解析逻辑。
 
-支持 15 个 harness，见"支持范围"。识别按文件内容进行，与文件名无关；识别不了格式时脚本会报错并列出支持名，这时按下面的表核对用户想找的会话是否在支持范围内，不要自行猜测解析方式。
+## 输入输出契约
 
-## 输出
+输入（二选一）：
 
-一份 Markdown 日志：默认写到 stdout，或按用户要求落到文件（`--out`）。交付时说明输出路径与事件条数。
+- transcript 文件路径（绝对、相对或 `~` 开头）；或
+- `--list`，无文件输入，从本机固定的 harness 目录列出候选。
+
+输出：
+
+- 转写：Markdown 写 stdout，或 `--out PATH` 写到文件（父目录自动创建）。
+  - 会话头：`# Transcript · <harness> · <开始时间>`，随后列出 harness、session、source、cwd、origin、history、events。
+  - 每个事件：`## <序号> · <种类>[ · <工具名>][ · <时间戳>]`；工具事件含 `- status:`、调用块与结果块。
+- `--list`：首行 `# candidates: N`；其后每行 `<修改时间>\t<harness>\t<绝对路径>`，按修改时间倒序；无候选时只输出首行。
+- 交付时说明输出位置与事件条数（取自 `events:` 行）。
+
+## 禁止事项
+
+- **不得手工解析 transcript，或用其他工具重新拼接输出**。识别、解析、裁剪、渲染一律由脚本完成。
+- **不得修改、移动、删除原 transcript 文件**。
+- **不得输出 thinking / reasoning 内容**。
+- **不得对支持范围以外的 harness 伪造解析结果**；直接说明尚未支持。
+- **不得把 `--list` 的候选列表当作转写结果交付**；必须对选中的文件运行转写。
+
+## 执行流程
+
+1. **确定文件**。
+   - 用户已给出路径：直接使用。
+   - 用户只给描述：运行 `--list`（可加 `--harness`、`--since`、`--limit`），按修改时间、路径中的项目名和文件名时间戳挑选。
+   - 唯一合理候选：直接转写。
+   - 多个候选无法区分：列出候选（时间、harness、路径）问用户要哪一个，不要猜。
+   - 没有候选：说明 `--list` 扫描的是下表目录，请用户给出文件路径。
+2. **转写**。运行下面的脚本命令；默认写 stdout，用户要文件时加 `--out`。
+3. **交付**。说明输出路径、harness、事件条数；多个文件分别转写、分别说明。脚本退出码非 0 时，把 stderr 原文转述给用户，不要自行修复或改写 transcript。
+
+## LLM 与脚本职责
+
+- LLM 负责：从用户描述推断 harness、时间、项目线索；在候选中做选择或追问；决定输出位置；交付说明。
+- 脚本负责：候选扫描、格式识别、解析、thinking 过滤、截断、Markdown 渲染、退出码。
+- 不要用 `ls`/`find`/`sed`/`awk` 替代 `--list` 或转写，也不要写临时解析脚本。
 
 ## 脚本
 
-解析与转写全部由脚本完成，不要手工解析 transcript。
-
 ```bash
+python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME] [--limit N] [--since YYYY-MM-DD]
 python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-chars N] [--out PATH]
 ```
 
-- `<skill_dir>`：本 `SKILL.md` 所在目录。
-- `<transcript>`：文件路径；支持 `~` 展开。
-- `--max-chars`：工具结果与 system/developer 消息的截断上限，默认 2000 字符。
-- `--out`：输出文件；缺省写 stdout。父目录不存在时自动创建。
-- 依赖：只用 Python 标准库，要求 Python ≥3.9。`.jsonl.zst` / `.jsonl.zstd` 需要解压能力，三者任一即可：Python 3.14 `compression.zstd`、`zstandard` 包、`zstd` 命令行。SQLite（kilo-code）用标准库 `sqlite3` 只读打开。
-- 退出码：0 成功；1 文件不存在、不可读、格式无法识别或无法解压（原因写 stderr）。
-
-调用时机：定位到 transcript 文件之后、向用户交付日志之前。
-
-## Codex transcript 定位
-
-1. 根目录：`$CODEX_HOME`，未设置时用 `~/.codex`。
-2. 会话文件：`<root>/sessions/YYYY/MM/DD/rollout-<时间戳>-<thread_id>.jsonl`；超过 7 天的文件被压成同名 `.jsonl.zst`。归档会话在 `<root>/archived_sessions/`。
-3. 按用户给的时间或项目线索缩小范围（目录就是本地日期，文件名里的时间戳也是本地时间）：
-
-```bash
-ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-* 2>/dev/null | head -5
-```
-
-4. 只有一个候选时直接用；多个候选且无法判断时，列出候选并问用户要哪一个。
+- `<skill_dir>`：本 `SKILL.md` 所在目录；脚本可在任意 cwd 运行。
+- `--harness` 取值（也是支持范围）：`codex`、`claude-code`、`qwen-code`、`command-code`、`codebuddy`、`gemini-cli`、`pi`、`omp`、`minimax-code`、`kilo-code`、`cline`、`multicoder`、`grok`、`kimi-code`、`deepseek-harness`。
+- `--limit`：`--list` 最多输出条数，默认 20。
+- `--since`：`--list` 只看修改时间不早于该本地日期的文件。
+- `--max-chars`：工具结果与 system/developer 消息的截断上限，默认 2000。
+- 退出码：0 成功；1 文件不存在/不可读/格式无法识别/解压失败；2 参数错误。
+- 依赖：仅标准库，Python ≥3.9。`.jsonl.zst`/`.jsonl.zstd` 解压三选一：Python 3.14 `compression.zstd`、`zstandard` 包、`zstd` 命令行。`kilo.db` 用标准库 `sqlite3` 只读打开。
+- `--help` 输出完整参数与示例。
 
 ## 支持范围
 
-脚本一次只解析**传入的那一个文件**。定位会话时按下表取文件；路径模式里的 `~` 需展开。
+下表同时是 `--list` 的扫描范围；用户直接给路径时按“备注”判断。脚本一次只解析传入的那一个文件。
 
 | harness | 传入文件 | 备注 |
 |---|---|---|
-| codex | `$CODEX_HOME/sessions/*/*/*/rollout-*.jsonl`（或 `.jsonl.zst`） | 旧版本 rollout 也支持；归档在 `$CODEX_HOME/archived_sessions/` |
+| codex | `$CODEX_HOME/sessions/*/*/*/rollout-*`（或 `.jsonl.zst`）；归档在 `$CODEX_HOME/archived_sessions/` | 旧版本 rollout 也支持；`CODEX_HOME` 未设置时用 `~/.codex` |
 | claude-code | `~/.claude/projects/*/<session-uuid>.jsonl` | `subagents/agent-*.jsonl` 是子代理会话，需单独传入 |
 | qwen-code | `~/.qwen/projects/*/chats/<uuid>.jsonl` | 同目录 `<uuid>.runtime.json`、`meta.json` 不是正文 |
 | command-code | `~/.commandcode/projects/*/*.jsonl` | `~/.commandcode/sessions/hooks-audit-*.jsonl` 是审计日志，不支持 |
@@ -71,21 +93,29 @@ ls -t "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/rollout-* 2>/dev/null | head 
 | kimi-code | `~/.kimi-code/sessions/*/session_*/agents/main/wire.jsonl` | `agents/agent-*/wire.jsonl` 是子代理会话，需单独传入 |
 | deepseek-harness | `~/.dsh/sessions/*/*/session*.jsonl.zstd` | 子会话是独立目录，需单独传入 |
 
-两条约束：
-
-- 子代理 / 子会话的 transcript 不自动拼接。用户要看完整调用链时，逐个文件运行脚本并分别交付。
-- `kilo.db` 多会话时只解析最新会话；用户要看其它会话时，说明需要先导出该会话，不要假装输出覆盖了整库。
-
 ## 裁剪与输出规则
 
 - thinking / reasoning 一律不输出。
-- 工具结果截断到上限并附 `[... truncated N chars ...]`；命令原文与用户/助手消息保留全文。
-- system/developer 消息同样截断到上限。
-- 输出结构：会话头（harness、session、源文件、cwd、origin、history 模式、事件计数），其后每个事件一个 `## <序号> · <种类>[ · <标签>][ · <时间戳>]` 小节；工具小节含状态行、命令块与结果块。
+- 工具结果截断到上限并附 `[... truncated N chars ...]`；shell 类工具的命令原文保留全文。
+- 非 shell 工具的参数按同一上限截断。
+- 用户与助手消息完整保留；system/developer 消息截断到上限。
+- 子代理 / 子会话的 transcript 不自动拼接。
 
-## 约束
+## 易错点
 
-- 不修改、不移动、不删除原 transcript 文件。
-- 不对会话内容做语义判断或总结；用户要摘要时说明这不在本 skill 的职责内。
-- 不手工解析 transcript，也不用其它工具重新拼接输出。
-- 当前支持范围见"支持范围"；不在表内的 harness 直接说明尚未支持，并给出用户可能想找的文件路径，不要伪造解析结果。
+- `--list` 只看路径和修改时间，不读内容：0 字节文件、二进制库也会被列出；能否解析以实际运行结果为准。
+- codex 超过 7 天的会话被压成 `.jsonl.zst`，修改时间是压缩时间；按会话发生时间挑选时看文件名里的时间戳（本地时间）。
+- gemini-cli 同一会话可能有两份副本，任选其一；要按 `sessionId` 判断时读文件内容，不要靠文件名。
+- kilo-code 传整个 `kilo.db`，只转写库中最新的会话；要其它会话需先导出。
+- claude-code、omp、kimi-code 的子代理文件是独立会话；用户要看完整调用链时逐个运行并分别交付。
+- 部分会话含孤立代理项（如 `\ud83e`），脚本已替换，不要为此改动原文件。
+
+## 成功标准
+
+- 交付的 Markdown 首行为 `# Transcript · <harness> · <开始时间>`，harness 与用户描述或 `--list` 结果一致。
+- 输出中不含任何 thinking/reasoning 文本；超限的工具结果带 `[... truncated N chars ...]`。
+- 用户只给模糊描述时，最终转写的是真实存在的文件，并且在交付说明中给出该路径与事件条数。
+
+## 参考资料
+
+本 skill 不依赖外部 references；参数与示例由脚本 `--help` 提供，支持矩阵与裁剪规则都在本文件内。
