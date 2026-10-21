@@ -1,0 +1,9 @@
+{"timestamp": "2026-01-01T00:00:00.000Z", "ordinal": 0, "type": "session_meta", "payload": {"id": "legacy-session", "session_id": "legacy-session", "timestamp": "2026-01-01T00:00:00.000Z", "cwd": "/tmp/demo", "originator": "codex_vscode", "cli_version": "0.77.0", "history_mode": "legacy"}}
+{"timestamp": "2026-01-01T00:00:01.000Z", "ordinal": 1, "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "用户请求：查一下 demo 资料。"}]}}
+{"timestamp": "2026-01-01T00:00:02.000Z", "ordinal": 2, "type": "response_item", "payload": {"type": "reasoning", "summary": [{"type": "summary_text", "text": "LEGACY_SECRET_REASONING 不应出现在输出里"}], "encrypted_content": "opaque"}}
+{"timestamp": "2026-01-01T00:00:03.000Z", "ordinal": 3, "type": "response_item", "payload": {"type": "function_call", "name": "mcp__demo__search", "arguments": "{\"query\":\"demo\"}", "call_id": "call_1"}}
+{"timestamp": "2026-01-01T00:00:04.000Z", "ordinal": 4, "type": "response_item", "payload": {"type": "function_call_output", "call_id": "call_1", "output": "demo 搜索结果：三条命中。"}}
+{"timestamp": "2026-01-01T00:00:05.000Z", "ordinal": 5, "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "已找到三条 demo 结果。"}]}}
+{"timestamp": "2026-01-01T00:00:06.000Z", "ordinal": 6, "type": "response_item", "payload": {"type": "custom_tool_call", "name": "apply_patch", "input": "*** Begin Patch\n*** Update File: demo.md\n*** End Patch", "call_id": "call_2"}}
+{"timestamp": "2026-01-01T00:00:07.000Z", "ordinal": 7, "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "call_2", "output": [{"type": "text", "text": "Success. Updated demo.md"}]}}
+{"timestamp": "2026-01-01T00:00:08.000Z", "ordinal": 8, "type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "SYSTEM_BLOB_LEGACY"}]}}

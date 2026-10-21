@@ -1,0 +1,2 @@
+[mcp_servers]
+agent-harness-wiki = { command = "npx", args = [ "-y", "agent-harness-wiki", "mcp" ] }
