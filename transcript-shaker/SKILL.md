@@ -11,7 +11,7 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
 
 ## 非目标
 
-- 不解释、总结、评价会话内容。用户要摘要时明确说明超出本 skill 职责。
+- 除 `compact` 档位与用户要求摘要、交接外，不解释、总结、评价会话内容；用户只是随口要摘要时，按「摘要与交接」处理。
 - 不把子代理/子会话 transcript 拼进主会话；需要时逐个文件运行、分别交付。
 - 不为支持范围以外的 harness 现场编写解析逻辑。
 
@@ -24,9 +24,9 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
 
 输出：
 
-- 转写：Markdown 写 stdout，或 `--out PATH` 写到文件（父目录自动创建）。
-  - 会话头：`# Transcript · <harness> · <开始时间>`，随后列出 harness、session、source、cwd、origin、history、events。
-  - 每个事件：`## <序号> · <种类>[ · <工具名>][ · <时间戳>]`；工具事件含 `- status:`、调用块与结果块。
+- 转写：按 `--format`（`markdown` / `yaml`）与 `--profile`（`default` / `full` / `compact`）写 stdout，或 `--out PATH` 写到文件（父目录自动创建）。
+  - 会话头：`# Transcript · <harness> · <开始时间>`，随后列出 harness、session、source、cwd、origin、history、events（`full` / `compact` 档位另有 `- profile:` 行）。
+  - 每个事件：`## <序号> · <种类>[ · <工具名>][ · <时间戳>]`；工具事件含 `- status:`、调用块与结果块（`compact` 档位没有结果块，非 shell 工具也没有调用块）。
 - `--list`：首行 `# candidates: N`；其后每行 `<修改时间>\t<harness>\t<绝对路径>`，按修改时间倒序；无候选时只输出首行。
 - 交付时说明输出位置与事件条数（取自 `events:` 行）。
 
@@ -46,7 +46,7 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
    - 唯一合理候选：直接转写。
    - 多个候选无法区分：列出候选（时间、harness、路径）问用户要哪一个，不要猜。
    - 没有候选：说明 `--list` 扫描的是下表目录，请用户给出文件路径。
-2. **转写**。运行下面的脚本命令；默认写 stdout，用户要文件时加 `--out`。
+2. **转写**。默认用 `default` 档位；用户要完整原文用 `full`，要快速通读用 `compact`；要摘要时先 `compact` 取素材再自己写（见「摘要与交接」）。默认写 stdout，用户要文件时加 `--out`。
 3. **交付**。说明输出路径、harness、事件条数；多个文件分别转写、分别说明。脚本退出码非 0 时，把 stderr 原文转述给用户，不要自行修复或改写 transcript。
 
 ## LLM 与脚本职责
@@ -59,7 +59,7 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
 
 ```bash
 python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME] [--match TEXT] [--limit N] [--since YYYY-MM-DD]
-python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-chars N] [--out PATH]
+python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--profile default|full|compact] [--format markdown|yaml] [--max-chars N] [--out PATH]
 ```
 
 - `<skill_dir>`：本 `SKILL.md` 所在目录；脚本可在任意 cwd 运行。
@@ -67,10 +67,57 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 - `--match`：`--list` 只看路径包含该子串（不区分大小写）的候选，用于按项目名缩小范围。
 - `--limit`：`--list` 最多输出条数，默认 20。
 - `--since`：`--list` 只看修改时间不早于该本地日期的文件。
-- `--max-chars`：工具结果与 system/developer 消息的截断上限，默认 2000。
+- `--format`：`markdown`（默认）或 `yaml`；两种格式承载同一份裁剪结果。
+- `--profile`：`default`（默认）、`full`（不截断）、`compact`（消息分档截断、工具只留名字与命令片段），详见「输出档位」。
+- `--max-chars`：仅 `default` 档位可用（其它档位给出即参数错误）；工具结果与 system/developer 消息的截断上限，默认 2000。
 - 退出码：0 成功；1 文件不存在/不可读/格式无法识别/解压失败；2 参数错误。
 - 依赖：仅标准库，Python ≥3.9。`.jsonl.zst`/`.jsonl.zstd` 解压三选一：Python 3.14 `compression.zstd`、`zstandard` 包、`zstd` 命令行。`kilo.db` 用标准库 `sqlite3` 只读打开。
 - `--help` 输出完整参数与示例。
+
+## 输出档位
+
+三个档位产出的是同一份 transcript 日志（`# Transcript · <harness> · <开始时间>`），区别只在裁剪程度：
+
+| 档位 | 保留内容 | 用途 |
+|---|---|---|
+| `default` | 消息全文；工具状态、命令与结果（结果与 system 消息截断到 `--max-chars`） | 常规阅读 |
+| `full` | 与 `default` 同结构，任何字段都不截断 | 要完整命令、完整结果或完整 system 提示词 |
+| `compact` | 消息按角色截断（system 300 字、user/assistant 1200 字）；工具只留名字与状态，shell 类工具附命令前 160 字，无结果块 | 快速通读整段过程 |
+
+- `full` / `compact` 的会话头各有一行 `- profile: <档位>`；`default` 没有这一行。
+- `compact` 仍按事件逐条编号，不合并、不删条目；它压的是每条事件的内容，不是事件本身。
+- 摘要（digest）不是档位：脚本只产出 transcript。摘要必须由你依据 transcript 起草，见下节。
+
+## 摘要与交接
+
+用户要摘要、提要、"这次会话做了什么"时：先跑 `--profile compact` 取素材（需要命令原文或完整结果时改用 `default` / `full`），再由你写摘要文档。脚本输出不是交付物。
+
+### digest 文档
+
+结构固定（Markdown，全文不超过 40 行，要点式，不复制大段原文）：
+
+  ```markdown
+  # Digest · <一句话主题>
+
+  - 会话：<harness> · <开始时间>
+  - 源：<transcript 绝对路径>
+  - 规模：<events> 事件
+
+  ## 目标
+  ## 过程要点
+  ## 结论与产出
+  ## 遗留问题
+  ```
+
+- 各节写法：`## 目标` 1–3 句；`## 过程要点` 3–8 条 bullet，每条一句（做了什么、关键发现、走过的弯路）；`## 结论与产出` 2–6 条 bullet（结论、改动的文件、命令产物、验证结果，按路径或命令引用）；`## 遗留问题` 0–4 条 bullet，没有就写 `无`。
+- 只写素材里有的内容；已裁剪掉的工具参数与结果不得凭猜测补写，需要细节时说明可用 `default` / `full` 重跑。
+
+### 交接文档
+
+只在用户明确要求把会话交接给下一次会话时写，五节：`## 目标`（下一次会话要达成什么）、`## 进展`（已完成 / 进行中 / 阻塞）、`## 待决策`（必须做的选择，写选项与当前倾向）、`## 建议技能`（点名的 skill）、`## 引用`（源 transcript、涉及的文件与命令、PR / commit；按路径引用）。
+
+- 脱敏：API key、密码、token、个人身份信息一律替换为 `<redacted>`。
+- 落盘位置用用户指定路径；未指定时写临时目录（如 `mktemp -t handoff-XXXXXX.md`）。
 
 ## 支持范围
 
@@ -94,7 +141,7 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 | kimi-code | `~/.kimi-code/sessions/*/session_*/agents/main/wire.jsonl` | `agents/agent-*/wire.jsonl` 是子代理会话，需单独传入；只有会话头与配置事件的空会话输出 `events: 0` |
 | deepseek-harness | `~/.dsh/sessions/*/*/session*.jsonl.zstd` | 子会话是独立目录，需单独传入 |
 
-## 裁剪与输出规则
+## 裁剪与输出规则（default / full 档位）
 
 - thinking / reasoning 一律不输出。
 - 工具结果截断到上限并附 `[... truncated N chars ...]`；shell 类工具的命令原文保留全文。
@@ -105,6 +152,8 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 ## 易错点
 
 - `--list` 只看路径和修改时间，不读内容：0 字节文件与声明为非正文的文件（如 command-code 的 `*.checkpoints.jsonl`）已被跳过，其余文件仍可能解析失败，以实际运行结果为准；空会话（kimi 只有配置事件、grok 模型未回复）会输出 `events: 0`。
+- `compact` 丢弃工具结果与非 shell 工具的调用内容，只留名字、状态与 shell 命令前 160 字；要原始命令或结果用 `default` / `full`。
+- 摘要没有脚本档位：`--profile compact` 拿到的是压缩后的 transcript，交付物必须是你起草的 `# Digest · …` 文档；交接文档另算，只在用户要求交接时写。
 - codex 超过 7 天的会话被压成 `.jsonl.zst`，修改时间是压缩时间；按会话发生时间挑选时看文件名里的时间戳（本地时间）。
 - gemini-cli 同一会话可能有两份副本，任选其一；要按 `sessionId` 判断时读文件内容，不要靠文件名。
 - kilo-code 传整个 `kilo.db`，只转写库中最新的会话；要其它会话需先导出。
@@ -116,7 +165,9 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 - 交付的 Markdown 首行为 `# Transcript · <harness> · <开始时间>`，harness 与用户描述或 `--list` 结果一致。
 - 输出中不含任何 thinking/reasoning 文本；超限的工具结果带 `[... truncated N chars ...]`。
 - 用户只给模糊描述时，最终转写的是真实存在的文件，并且在交付说明中给出该路径与事件条数。
+- `compact` 档位交付的是 `# Transcript · …`（含 `- profile: compact`），与 `default` 同一文档类型，只压内容不删条目。
+- 用户要摘要时，交付的是你起草的 `# Digest · …` 文档（四节、全文不超过 40 行），素材来自 `--profile compact`；用户要求交接时另交五节交接文档。
 
 ## 参考资料
 
-本 skill 不依赖外部 references；参数与示例由脚本 `--help` 提供，支持矩阵与裁剪规则都在本文件内。
+本 skill 不依赖外部 references；参数与示例由脚本 `--help` 提供，支持矩阵、档位规则与裁剪规则都在本文件内。

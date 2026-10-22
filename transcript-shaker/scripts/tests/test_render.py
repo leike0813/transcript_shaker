@@ -1,5 +1,5 @@
 from transcript_shaker.model import Event, Session
-from transcript_shaker.render import render_markdown, truncate
+from transcript_shaker.render import render_markdown, render_yaml, truncate
 
 
 def _session(**overrides):
@@ -90,3 +90,55 @@ def test_omits_empty_optional_fields():
     assert "- origin:" not in doc
     assert "- history:" not in doc
     assert "- events: 0" in doc
+
+
+def test_zero_limit_disables_truncation():
+    """full 档位在 CLI 里映射为 max_chars=0。"""
+    doc = render_markdown(
+        _session(),
+        [
+            Event(kind="message", role="system", text="s" * 5000),
+            Event(kind="tool", tool="read_file", call="p" * 5000, result="r" * 5000),
+        ],
+        max_chars=0,
+    )
+    assert "truncated" not in doc
+    assert "s" * 5000 in doc and "r" * 5000 in doc and "p" * 5000 in doc
+
+
+def test_yaml_document_shape():
+    events = [
+        Event(kind="message", role="user", text="你好"),
+        Event(kind="tool", tool="exec_command", call="ls", result="ok\nline2", status="completed"),
+    ]
+    assert render_yaml(_session(), events) == (
+        "harness: codex\n"
+        "profile: default\n"
+        "session: sid\n"
+        'source: "/tmp/x.jsonl"\n'
+        'cwd: "/tmp"\n'
+        'started: "2026-01-01T00:00:00Z"\n'
+        'origin: "codex-tui 0.163.0"\n'
+        "history: paginated\n"
+        "events:\n"
+        "  - kind: message\n"
+        "    role: user\n"
+        '    text: "你好"\n'
+        "  - kind: tool\n"
+        "    tool: exec_command\n"
+        "    status: completed\n"
+        "    call: ls\n"
+        "    result: |-\n"
+        "      ok\n"
+        "      line2\n"
+    )
+
+
+def test_yaml_quotes_unsafe_scalars_and_omits_empty_fields():
+    doc = render_yaml(
+        _session(session_id="a: b # c", cwd="", originator="", version="", history=""),
+        [Event(kind="message", role="user", text='he said "hi"')],
+    )
+    assert 'session: "a: b # c"' in doc
+    assert "- cwd:" not in doc and "- origin:" not in doc and "- history:" not in doc
+    assert 'text: "he said \\"hi\\""' in doc

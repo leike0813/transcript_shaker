@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from transcript_shaker.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -41,3 +43,39 @@ def test_unsupported_format(tmp_path, capsys):
     path.write_text('{"hello": "world"}', encoding="utf-8")
     assert main([str(path)]) == 1
     assert "unsupported transcript format" in capsys.readouterr().err
+
+
+def test_format_yaml(capsys):
+    assert main([str(PAGINATED), "--format", "yaml"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("harness: codex\n")
+    assert "profile: default\n" in out
+
+
+def test_profile_compact_stays_a_transcript(capsys):
+    assert main([str(PAGINATED), "--profile", "compact"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("# Transcript · codex · ")
+    assert "- profile: compact" in out
+    assert "# Transcript digest" not in out
+
+
+def test_digest_is_not_a_script_profile(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([str(PAGINATED), "--profile", "digest"])
+    assert exc.value.code == 2
+
+
+def test_max_chars_requires_default_profile(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([str(PAGINATED), "--profile", "full", "--max-chars", "10"])
+    assert exc.value.code == 2
+
+
+def test_list_rejects_profile_and_format(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--list", "--profile", "compact"])
+    assert exc.value.code == 2
+    with pytest.raises(SystemExit) as exc:
+        main(["--list", "--format", "yaml"])
+    assert exc.value.code == 2
