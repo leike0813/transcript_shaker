@@ -27,6 +27,7 @@
 
 - **避免生成不符合 Open Agent Skills 规范的文件**：Open Agent Skills 规范规定，一个 Skill 包中必须有一个位于包根目录的 `SKILL.md` 作为 Agent 直接读取的核心指令文件。核心指令文件不宜过长。按需执行的补充指令、参考文档等可放在 Skill 包中的 `references` 目录中（需要在 `SKILL.md` 中声明其用途及用法）；Python 脚本放在 Skill 包中的 `scripts` 目录中；其它资产文件可放在 Skill 包中的 `assets` 目录中。
 - **避免在 `SKILL.md` 中添加对 Skill 执行没有帮助的信息**: `SKILL.md` 中应仅包含对 Skill 执行具有约束作用或帮助作用的指令。一切面向用户的提示、说明，以及错误的、自相矛盾的、模棱两可的指令均不应该出现在 `SKILL.md`中
+- **避免把测试代码放进 Skill 包**：Skill 包（`transcript-shaker/`）只放 `SKILL.md`、`references/`、`scripts/`、`assets/`；Python 测试与 fixture 放在仓库根的 `tests/`，运行 `python -m pytest tests`。
 
 ## 参考资料
 
