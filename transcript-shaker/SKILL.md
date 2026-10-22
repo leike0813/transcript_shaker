@@ -13,6 +13,7 @@ description: Turn a local agent-session transcript into a readable log (markdown
 
 - 用户给出或描述一段**已有**会话记录（transcript / rollout / chat history / 会话文件）。
 - 用户提到「之前那次」「上次那个会话」「最近的 agent 会话」。
+- 用户记得会话内容（说过的话、某个报错文本、某个关键词）但说不清是哪个文件 → `--search` 内容检索。
 - 用户要求导出、整理、精炼、通读、审计一段会话过程。
 - 用户要求基于某段会话写摘要、提要、交接文档。
 - 用户要求把会话转成机器可解析格式。
@@ -24,8 +25,11 @@ description: Turn a local agent-session transcript into a readable log (markdown
 **输入**：自由文本，可以为空。
 
 - 给出路径 → 直接转写。
-- 只给线索（时间 / 项目 / harness / 大概说过什么）→ `--list` 定位。
+- 只给 harness / 目录 / 时间 / 项目线索（没说内容）→ `--list` 定位。
+- 只给内容线索（说过什么、什么报错）且 harness 已知 → `--search` 定位；harness 未知 → 先问用户是哪个 harness，不要跨 harness 试，也不要靠猜。
 - 为空或只说「最近的会话」→ `--list` 列候选，然后取最符合的一条或问用户。
+
+内容检索只用于定位，不产出交付物；命中后照常按「三个轴」转写。
 
 **输出**：
 
@@ -74,7 +78,7 @@ description: Turn a local agent-session transcript into a readable log (markdown
 
 ## 执行流程
 
-1. **定输入**：见「输入输出契约」。
+1. **定输入**：见「输入输出契约」。只有内容线索时走 `--search`；harness 不明先问用户。
 2. **定三个轴**：压缩档位按用户意图对照轴一表格；附加输出看用户要不要摘要 / 交接；格式看是给人读（markdown）还是给程序解析（yaml）。用户没说就 `default` + 无 + `markdown`。
 3. **跑脚本**：见「脚本调用」。
 4. **写附加文档**（若轴二不为「无」）：见「附加输出流程」。
@@ -85,19 +89,34 @@ description: Turn a local agent-session transcript into a readable log (markdown
 ```bash
 python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> --profile default|full|compact --format markdown|yaml [--max-chars N] [--out PATH]
 python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME] [--match TEXT] [--since YYYY-MM-DD] [--limit N]
+python3 <skill_dir>/scripts/transcript_shaker/__main__.py --search "<内容关键词>" --harness NAME [--since YYYY-MM-DD] [--match TEXT] [--limit N]
 ```
 
 | 参数 | 含义 |
 |---|---|
 | `transcript` | 要转写的文件路径（绝对、相对或 `~` 开头） |
 | `--list` | 不解析内容，按各 harness 固定目录列出候选 |
-| `--harness` / `--match` / `--since` / `--limit` | 配合 `--list` 过滤；不能用于转写 |
+| `--search` | 内容检索：按空白切词后匹配原始字节；必须配 `--harness`；`kilo-code` 不支持 |
+| `--harness` | 配合 `--list` / `--search` 过滤；检索时用户没给 harness 必须先问用户，给了会话目录即视为已给 |
+| `--match` / `--since` / `--limit` | 配合 `--list` / `--search` 过滤；不能用于转写 |
 | `--profile` | 压缩档位，取值见轴一 |
 | `--format` | `markdown`（缺省）或 `yaml` |
 | `--max-chars` | 仅 `default` 可用：工具结果与 system 消息的截断上限，缺省 2000 |
 | `--out` | 输出文件路径；缺省写 stdout，父目录自动创建 |
 
 完整参数约束、退出码、输出契约、依赖与边界情况见 `references/script-usage.md`。
+
+## 内容检索
+
+用户只记得会话里说过什么、不知道是哪个文件时用它。
+
+1. **先定 harness**。用户说了 harness、给了会话文件路径或会话目录 → 直接用；只给内容 → **先问用户是哪个 harness**（列出「支持范围」里的 harness 名，去掉不支持检索的 kilo-code），不要跨 harness 逐个试，也不要猜。
+2. **跑检索**：`--search "<词>" --harness <name>`，可加 `--since` / `--match`（项目目录片段）缩小范围。词用有区分度的 2–3 个关键词，全词命中优于单个常见词；中文查询没有空格时先自己拆成 2–3 个词项（整句会被当成一个词项）。
+3. **看歧义标记**：
+   - `# ambiguous: no` → 首行就是目标，直接转写它。
+   - `# ambiguous: yes` → **不要自己挑**：把候选行（修改时间、score、路径）连同各路径含义列给用户，问处理哪一个；用户选定后再转写。
+   - `# matches: 0` → 先确认 harness 对不对、词是否换过（去掉最泛的词），或改用 `--since` / `--match` 再试一次；仍无结果就如实报告没找到。
+4. **检索结果不是交付物**。交付物永远是转写出来的 transcript（以及按需的 digest / handoff）。
 
 ## 附加输出流程
 
@@ -149,6 +168,9 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME
 - claude-code、omp、kimi-code 的子代理文件是独立会话，需要逐个运行、分别交付。
 - 部分会话含孤立代理项（如 `\ud83e`），脚本已替换，不要为此改动原文件。
 - 附加文档默认写到当前工作目录，命名 `<transcript 主名>-digest.<ext>`；用户给了路径则以其为准。
+- `--search` 匹配原始字节，不解析事件：system 提示、工具 schema 与思考文本都会参与匹配，命中数不等于命中质量；用有区分度的多词项，别用单个常见词。
+- `--search` 只在指定 harness 内检索，且不支持 kilo-code（一个库含多个会话）。
+- codex 全库含 4000+ 个 `.zst` 压缩会话，检索要解压，耗时可达几十秒；先用 `--since` / `--match` 缩小。
 
 ## 成功标准
 
@@ -157,10 +179,12 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME
 - 选了 digest / handoff 时，附加文档存在、标题正确（`# Digest ·` / `# Handoff ·`）、无残留 `<...>` 占位符、结构与 `assets/` 对应模版一致；handoff 已脱敏。
 - 交付说明包含 harness、压缩档位、格式、路径、事件条数。
 - 用户只给模糊描述时，最终转写的是真实存在的文件，且交付说明给出该路径。
+- 用户只给内容线索时，harness 不明先问用户、不擅自跨 harness 检索；最终定位并转写的是真实存在的文件。
+- `# ambiguous: yes` 时先让用户选，不擅自挑第一个。
 
 ## 参考资料
 
-- `references/script-usage.md`：脚本完整用法（参数约束、退出码、输出契约、依赖、边界情况、常见错误）。改脚本或排查调用问题时读。
+- `references/script-usage.md`：脚本完整用法（参数约束、退出码、输出契约、内容检索、依赖、边界情况、常见错误）。改脚本或排查调用问题时读。
 - `assets/digest.md` / `assets/digest.yaml`：摘要模版（Markdown / YAML）。写 digest 时必读。
 - `assets/handoff.md` / `assets/handoff.yaml`：交接模版（Markdown / YAML）。写 handoff 时必读。
 - `scripts/transcript_shaker/`：实现；只在需要判断某个字段是否会被输出时读。
