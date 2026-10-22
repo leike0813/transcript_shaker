@@ -120,3 +120,41 @@ def test_filter_flags_require_list(home):
     with pytest.raises(SystemExit) as exc:
         main(["--harness", "codex"])
     assert exc.value.code == 2
+
+
+def test_skips_zero_byte_candidates(home):
+    path = home / ".codebuddy/projects/proj/empty.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text("", encoding="utf-8")
+    assert find_candidates(harnesses=["codebuddy"]) == []
+
+
+def test_skips_declared_non_transcript_names(home):
+    real = home / ".commandcode/projects/proj/abc.jsonl"
+    _touch(real, datetime(2026, 10, 21, 9, 0, 0))
+    checkpoint = home / ".commandcode/projects/proj/abc.checkpoints.jsonl"
+    checkpoint.write_text("{}", encoding="utf-8")
+    assert [c.path for c in find_candidates(harnesses=["command-code"])] == [real]
+
+
+def test_match_filters_on_path(home):
+    wanted = home / ".omp/agent/sessions/-Workspace-Code-RiskFlow/2026-10-21T09-00-00-000Z_a.jsonl"
+    _touch(wanted, datetime(2026, 10, 21, 9, 0, 0))
+    other = home / ".omp/agent/sessions/-other/2026-10-21T09-00-00-000Z_b.jsonl"
+    _touch(other, datetime(2026, 10, 21, 8, 0, 0))
+    assert [c.path for c in find_candidates(harnesses=["omp"], match="riskflow")] == [wanted]
+    assert [c.path for c in find_candidates(harnesses=["omp"], match="RISKFLOW")] == [wanted]
+
+
+def test_cli_match_filters_and_rejects_transcribe(home, capsys):
+    wanted = home / ".omp/agent/sessions/-Workspace-Code-RiskFlow/2026-10-21T09-00-00-000Z_a.jsonl"
+    _touch(wanted, datetime(2026, 10, 21, 9, 0, 0))
+    other = home / ".omp/agent/sessions/-other/2026-10-21T09-00-00-000Z_b.jsonl"
+    _touch(other, datetime(2026, 10, 21, 8, 0, 0))
+    assert main(["--list", "--match", "riskflow"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == "# candidates: 1"
+    assert str(wanted) in out[1]
+    with pytest.raises(SystemExit) as exc:
+        main(["--match", "riskflow", "some.jsonl"])
+    assert exc.value.code == 2

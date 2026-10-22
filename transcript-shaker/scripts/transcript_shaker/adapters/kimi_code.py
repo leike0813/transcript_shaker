@@ -4,6 +4,7 @@ wire 是 agent 内部事件总线，几十种事件里只有 `agent.message.appe
 `context.append_message`、`llm.request`、`turn.*`、`file_history.*` 等都是索引或状态。
 正文消息外壳是 `{message: {message: {role, content[], toolCalls[]}, meta: {source}}}`。
 子代理写在 `agents/agent-*/wire.jsonl`，不自动拼接。
+只有会话头与配置事件的空会话也识别，输出 0 事件。
 """
 
 from __future__ import annotations
@@ -43,14 +44,22 @@ def _looks_like_kimi(record: Dict[str, Any]) -> bool:
     return isinstance(rtype, str) and "." in rtype and rtype in WIRE_TYPES
 
 
+def _looks_like_kimi_metadata(record: Dict[str, Any]) -> bool:
+    """会话头：正文前中断的会话只剩 metadata + config.update，靠它识别。"""
+    return record.get("type") == "metadata" and "protocol_version" in record
+
+
 class KimiCodeAdapter(Adapter):
     name = "kimi-code"
 
     def detect(self, path: Path) -> bool:
         try:
-            return any(_looks_like_kimi(record) for record in head_records(path))
+            records = head_records(path)
         except (OSError, RuntimeError):
             return False
+        return any(
+            _looks_like_kimi(record) or _looks_like_kimi_metadata(record) for record in records
+        )
 
     def parse(self, path: Path) -> Tuple[Session, List[Event]]:
         events: List[Event] = []

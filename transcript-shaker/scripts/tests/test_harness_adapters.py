@@ -264,6 +264,25 @@ def test_grok_synthetic_user_is_skipped():
     assert "GROK_SYNTHETIC" not in _blob(events)
 
 
+def test_grok_session_without_reply_is_detected():
+    path = FIXTURES / "grok_partial" / "chat_history.jsonl"
+    adapter = detect_adapter(path)
+    assert adapter.name == "grok"
+    session, events = adapter.parse(path)
+    assert [event.role for event in events] == ["system", "user"]
+    assert "GROK_PARTIAL_SYNTHETIC" not in _blob(events)
+    assert session.session_id == "grok_partial"
+
+
+def test_kimi_session_without_messages_is_detected():
+    path = FIXTURES / "kimi_empty" / "session_empty" / "agents" / "main" / "wire.jsonl"
+    adapter = detect_adapter(path)
+    assert adapter.name == "kimi-code"
+    session, events = adapter.parse(path)
+    assert events == []
+    assert session.session_id == "empty"
+
+
 def test_dsh_replaced_message_is_skipped():
     path = FIXTURES / "dsh_session.jsonl"
     _, events = detect_adapter(path).parse(path)

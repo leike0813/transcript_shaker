@@ -42,7 +42,7 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
 
 1. **确定文件**。
    - 用户已给出路径：直接使用。
-   - 用户只给描述：运行 `--list`（可加 `--harness`、`--since`、`--limit`），按修改时间、路径中的项目名和文件名时间戳挑选。
+   - 用户只给描述：运行 `--list`（可加 `--harness`、`--match`、`--since`、`--limit`），按修改时间、路径中的项目名和文件名时间戳挑选。
    - 唯一合理候选：直接转写。
    - 多个候选无法区分：列出候选（时间、harness、路径）问用户要哪一个，不要猜。
    - 没有候选：说明 `--list` 扫描的是下表目录，请用户给出文件路径。
@@ -58,12 +58,13 @@ description: 把 Agent Harness 的本地会话记录（transcript）列出、裁
 ## 脚本
 
 ```bash
-python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME] [--limit N] [--since YYYY-MM-DD]
+python3 <skill_dir>/scripts/transcript_shaker/__main__.py --list [--harness NAME] [--match TEXT] [--limit N] [--since YYYY-MM-DD]
 python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-chars N] [--out PATH]
 ```
 
 - `<skill_dir>`：本 `SKILL.md` 所在目录；脚本可在任意 cwd 运行。
 - `--harness` 取值（也是支持范围）：`codex`、`claude-code`、`qwen-code`、`command-code`、`codebuddy`、`gemini-cli`、`pi`、`omp`、`minimax-code`、`kilo-code`、`cline`、`multicoder`、`grok`、`kimi-code`、`deepseek-harness`。
+- `--match`：`--list` 只看路径包含该子串（不区分大小写）的候选，用于按项目名缩小范围。
 - `--limit`：`--list` 最多输出条数，默认 20。
 - `--since`：`--list` 只看修改时间不早于该本地日期的文件。
 - `--max-chars`：工具结果与 system/developer 消息的截断上限，默认 2000。
@@ -80,7 +81,7 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 | codex | `$CODEX_HOME/sessions/*/*/*/rollout-*`（或 `.jsonl.zst`）；归档在 `$CODEX_HOME/archived_sessions/` | 旧版本 rollout 也支持；`CODEX_HOME` 未设置时用 `~/.codex` |
 | claude-code | `~/.claude/projects/*/<session-uuid>.jsonl` | `subagents/agent-*.jsonl` 是子代理会话，需单独传入 |
 | qwen-code | `~/.qwen/projects/*/chats/<uuid>.jsonl` | 同目录 `<uuid>.runtime.json`、`meta.json` 不是正文 |
-| command-code | `~/.commandcode/projects/*/*.jsonl` | `~/.commandcode/sessions/hooks-audit-*.jsonl` 是审计日志，不支持 |
+| command-code | `~/.commandcode/projects/*/*.jsonl` | `*.checkpoints.jsonl` 是检查点元数据（prompt + 文件快照），`--list` 跳过；`~/.commandcode/sessions/hooks-audit-*.jsonl` 是审计日志，不支持 |
 | codebuddy | `~/.codebuddy/projects/*/*.jsonl` | 0 字节文件很常见，跳过 |
 | gemini-cli | `~/.gemini/tmp/*/chats/session-*.json` | 同一会话可能有两份副本，按 `sessionId` 取一份 |
 | pi | `~/.pi/agent/sessions/*/*.jsonl` | 一个文件一个会话 |
@@ -89,8 +90,8 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 | kilo-code | `~/.local/share/kilo/kilo.db` | 整个库，只取最新的一个会话 |
 | cline | `~/.cline/data/sessions/*/*.messages.json` | 同目录 `<id>.json` 提供 cwd 与真实开始时间 |
 | multicoder | `~/.multicoder/content/ses_*.json` | 无逐条时间戳 |
-| grok | `~/.grok/sessions/*/*/chat_history.jsonl` | 只读这一份；同目录 `updates.jsonl`、`events.jsonl` 是重复流 |
-| kimi-code | `~/.kimi-code/sessions/*/session_*/agents/main/wire.jsonl` | `agents/agent-*/wire.jsonl` 是子代理会话，需单独传入 |
+| grok | `~/.grok/sessions/*/*/chat_history.jsonl` | 只读这一份；同目录 `updates.jsonl`、`events.jsonl` 是重复流；模型未回复的会话也识别，输出 `events: 0` |
+| kimi-code | `~/.kimi-code/sessions/*/session_*/agents/main/wire.jsonl` | `agents/agent-*/wire.jsonl` 是子代理会话，需单独传入；只有会话头与配置事件的空会话输出 `events: 0` |
 | deepseek-harness | `~/.dsh/sessions/*/*/session*.jsonl.zstd` | 子会话是独立目录，需单独传入 |
 
 ## 裁剪与输出规则
@@ -103,7 +104,7 @@ python3 <skill_dir>/scripts/transcript_shaker/__main__.py <transcript> [--max-ch
 
 ## 易错点
 
-- `--list` 只看路径和修改时间，不读内容：0 字节文件、二进制库也会被列出；能否解析以实际运行结果为准。
+- `--list` 只看路径和修改时间，不读内容：0 字节文件与声明为非正文的文件（如 command-code 的 `*.checkpoints.jsonl`）已被跳过，其余文件仍可能解析失败，以实际运行结果为准；空会话（kimi 只有配置事件、grok 模型未回复）会输出 `events: 0`。
 - codex 超过 7 天的会话被压成 `.jsonl.zst`，修改时间是压缩时间；按会话发生时间挑选时看文件名里的时间戳（本地时间）。
 - gemini-cli 同一会话可能有两份副本，任选其一；要按 `sessionId` 判断时读文件内容，不要靠文件名。
 - kilo-code 传整个 `kilo.db`，只转写库中最新的会话；要其它会话需先导出。

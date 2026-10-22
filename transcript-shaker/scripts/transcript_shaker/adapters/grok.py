@@ -28,14 +28,33 @@ def _looks_like_grok(record: Dict[str, Any]) -> bool:
     return rtype == "tool_result" and "tool_call_id" in record
 
 
+# 会话在模型回复前中断时没有 assistant/tool 记录，只能靠这些 grok 专有键认定。
+GROK_MARKERS = ("synthetic_reason", "prompt_index", "model_id", "tool_calls", "tool_call_id")
+
+
+def _looks_like_grok_file(records: List[Dict[str, Any]]) -> bool:
+    """整份文件都是 `{type, content…}` 对话记录，且至少一条带 grok 专有键。"""
+    if not records:
+        return False
+    if not any(key in record for record in records for key in GROK_MARKERS):
+        return False
+    for record in records:
+        if record.get("type") not in DIALOG_TYPES:
+            return False
+        if "message" in record or "payload" in record:
+            return False
+    return True
+
+
 class GrokAdapter(Adapter):
     name = "grok"
 
     def detect(self, path: Path) -> bool:
         try:
-            return any(_looks_like_grok(record) for record in head_records(path))
+            records = head_records(path)
         except (OSError, RuntimeError):
             return False
+        return any(_looks_like_grok(record) for record in records) or _looks_like_grok_file(records)
 
     def parse(self, path: Path) -> Tuple[Session, List[Event]]:
         events: List[Event] = []

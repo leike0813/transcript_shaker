@@ -1,0 +1,11 @@
+{
+  "id": "session_empty",
+  "version": 2,
+  "cwd": "/tmp/kimi-empty",
+  "archived": false,
+  "createdAt": "2026-10-21T09:00:00.000Z",
+  "updatedAt": "2026-10-21T09:00:10.000Z",
+  "agents": {
+    "main": {"homedir": "agents/main", "type": "main"}
+  }
+}

@@ -1,0 +1,3 @@
+{"type": "system", "content": "GROK_PARTIAL_SYSTEM"}
+{"type": "user", "content": "GROK_PARTIAL_USER", "prompt_index": 0}
+{"type": "user", "content": [{"type": "text", "text": "GROK_PARTIAL_SYNTHETIC"}], "synthetic_reason": "context_injection"}

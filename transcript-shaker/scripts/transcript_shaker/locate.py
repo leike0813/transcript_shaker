@@ -16,6 +16,7 @@ class Source:
     root: str  # "~/.claude"；以 ~ 开头
     patterns: Tuple[str, ...]
     env: str = ""  # 非空时该环境变量优先于 root（codex 的 CODEX_HOME）
+    skip: Tuple[str, ...] = ()  # 文件名 glob；命中即跳过（这些文件永远不是该 harness 的正文）
 
 
 # 键必须与 adapters.ADAPTERS 的 name 一致。
@@ -25,7 +26,7 @@ HARNESS_SOURCES: Dict[str, Source] = {
     ),
     "claude-code": Source("~/.claude", ("projects/*/*.jsonl",)),
     "qwen-code": Source("~/.qwen", ("projects/*/chats/*.jsonl",)),
-    "command-code": Source("~/.commandcode", ("projects/*/*.jsonl",)),
+    "command-code": Source("~/.commandcode", ("projects/*/*.jsonl",), skip=("*.checkpoints.jsonl",)),
     "codebuddy": Source("~/.codebuddy", ("projects/*/*.jsonl",)),
     "gemini-cli": Source("~/.gemini", ("tmp/*/chats/session-*.json",)),
     "pi": Source("~/.pi", ("agent/sessions/*/*.jsonl",)),
@@ -57,6 +58,7 @@ def _root(source: Source) -> Path:
 def find_candidates(
     harnesses: Optional[Sequence[str]] = None,
     since: Optional[date] = None,
+    match: Optional[str] = None,
 ) -> List[Candidate]:
     found: Dict[Path, Candidate] = {}
     for name in harnesses or list(HARNESS_SOURCES):
@@ -64,13 +66,20 @@ def find_candidates(
         root = _root(source)
         for pattern in source.patterns:
             for path in root.glob(pattern):
+                if any(path.match(skip) for skip in source.skip):
+                    continue
                 if not path.is_file():
                     continue
                 try:
-                    mtime = datetime.fromtimestamp(path.stat().st_mtime)
+                    stat = path.stat()
                 except OSError:
                     continue
+                if stat.st_size == 0:
+                    continue
+                mtime = datetime.fromtimestamp(stat.st_mtime)
                 if since is not None and mtime.date() < since:
+                    continue
+                if match and match.lower() not in str(path).lower():
                     continue
                 found.setdefault(path, Candidate(harness=name, path=path, mtime=mtime))
     return sorted(found.values(), key=lambda c: (-c.mtime.timestamp(), str(c.path)))

@@ -70,6 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="配合 --list：只看修改时间不早于该本地日期的候选",
     )
     parser.add_argument(
+        "--match",
+        help="配合 --list：只看路径包含该子串（不区分大小写）的候选",
+    )
+    parser.add_argument(
         "--max-chars",
         type=_positive_int,
         default=None,
@@ -89,13 +93,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         candidates = find_candidates(
             harnesses=[args.harness] if args.harness else None,
             since=args.since,
+            match=args.match,
         )
         sys.stdout.write(render_candidates(candidates[:limit]))
         return 0
     if args.transcript is None:
         parser.error("缺少 transcript 参数（或使用 --list 列出候选）")
-    if args.harness or args.since or args.limit is not None:
-        parser.error("--harness / --since / --limit 仅用于 --list")
+    if args.harness or args.since or args.limit is not None or args.match:
+        parser.error("--harness / --since / --limit / --match 仅用于 --list")
     max_chars = args.max_chars if args.max_chars is not None else DEFAULT_MAX_CHARS
 
     path = Path(args.transcript).expanduser()
